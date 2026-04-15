@@ -178,14 +178,18 @@ for _neg in lb_breakdown_neg:
     _top["Mean"] = _top["Mean"].round(1)
     lb_school_data[_neg] = _top
 
-# ── Fastest completion time (Top 10) ──────────────────────────────────────────
+# ── Fastest completion per negeri (highest markah, then fastest time) ────────
 lb_fast = lb_pos[lb_pos["Masa Selesai"].notna()].copy()
 lb_fast["_ms_td"] = pd.to_timedelta(lb_fast["Masa Selesai"])
-lb_fast10 = (
-    lb_fast.nsmallest(10, "_ms_td")
-    [["Nama Peserta", "Sekolah", "Negeri", "Markah", "Masa Selesai"]]
-    .reset_index(drop=True)
-)
+lb_fast_neg = {}
+for _neg in lb_breakdown_neg:
+    _sub = lb_fast[lb_fast["Negeri"] == _neg].sort_values(
+        ["Markah", "_ms_td"], ascending=[False, True]
+    ).head(5)
+    if not _sub.empty:
+        lb_fast_neg[_neg] = _sub[
+            ["Nama Peserta", "Sekolah", "Markah", "Masa Selesai"]
+        ].reset_index(drop=True)
 
 # Per school: skewness of Markah
 lb_skew_data = {}
@@ -285,16 +289,17 @@ def build_lb_skew_chart(negeri, school):
     return dcc.Graph(figure=fig, config={"displayModeBar": False})
 
 
-def build_lb_fastest_table():
-    if lb_fast10.empty:
+def build_lb_fastest_table(negeri):
+    fdf = lb_fast_neg.get(negeri, pd.DataFrame())
+    if fdf.empty:
         return html.P("Tiada data", style={"color": "#666"})
     header = html.Thead(html.Tr([
         html.Th(c, style={"fontSize": "0.75rem", "color": "#888",
                           "borderBottom": "1px solid #333", "padding": "6px 10px"})
-        for c in ["#", "Nama Peserta", "Sekolah", "Negeri", "Markah", "Masa Selesai"]
+        for c in ["#", "Nama Peserta", "Sekolah", "Markah", "Masa Selesai"]
     ]))
     rows = []
-    for i, (_, r) in enumerate(lb_fast10.iterrows(), 1):
+    for i, (_, r) in enumerate(fdf.iterrows(), 1):
         medal = {1: "\U0001f947", 2: "\U0001f948", 3: "\U0001f949"}.get(i, str(i))
         rows.append(html.Tr([
             html.Td(medal, style={"fontSize": "0.85rem", "textAlign": "center",
@@ -303,8 +308,6 @@ def build_lb_fastest_table():
                                                "padding": "6px 10px"}),
             html.Td(r["Sekolah"], style={"fontSize": "0.78rem", "color": "#aaa",
                                           "maxWidth": "220px", "padding": "6px 10px"}),
-            html.Td(r["Negeri"], style={"fontSize": "0.78rem", "color": "#aaa",
-                                         "padding": "6px 10px"}),
             html.Td(str(r["Markah"]), style={"fontSize": "0.78rem", "color": "#38bdf8",
                                               "textAlign": "center", "padding": "6px 10px"}),
             html.Td(r["Masa Selesai"], style={"fontSize": "0.78rem", "color": "#34d399",
@@ -470,21 +473,28 @@ app.layout = html.Div(
                     "skor tinggi. Nilai hampir 0 = taburan sekata."
                 ),
 
-                # ── Section 4: Fastest completion ─────────────────────
-                html.P("MASA SELESAI TERPANTAS (TOP 10)", style=SECTION_LABEL_STYLE),
-                html.P("Peserta yang menamatkan ujian paling awal dengan markah > 0.",
+                # ── Section 4: Fastest completion per negeri ───────
+                html.P("MARKAH TERTINGGI & MASA TERPANTAS PER NEGERI (TOP 5)", style=SECTION_LABEL_STYLE),
+                html.P("Peserta terbaik mengikut markah tertinggi, diikuti masa selesai terpantas.",
                        style={"color": "#666", "fontSize": "0.8rem",
                               "marginBottom": "16px"}),
-                html.Div(
-                    build_lb_fastest_table(),
-                    style={"background": CARD_BG, "borderRadius": "12px",
-                           "padding": "14px", "border": f"1px solid {BORDER}",
-                           "overflowX": "auto", "marginBottom": "10px"},
-                ),
+
+                *[html.Div([
+                    html.H5(f"\U0001f3c6 {neg}",
+                            style={"color": "#f59e0b", "fontSize": "0.95rem",
+                                   "fontWeight": "600", "marginBottom": "10px",
+                                   "marginTop": "20px"}),
+                    html.Div(
+                        build_lb_fastest_table(neg),
+                        style={"background": CARD_BG, "borderRadius": "12px",
+                               "padding": "14px", "border": f"1px solid {BORDER}",
+                               "overflowX": "auto", "marginBottom": "10px"},
+                    ),
+                ]) for neg in lb_breakdown_neg if neg in lb_fast_neg],
+
                 _conclusion(
-                    f"Peserta terpantas menamatkan ujian pada {lb_fast10.iloc[0]['Masa Selesai']} "
-                    f"dengan markah {lb_fast10.iloc[0]['Markah']:.0f}. "
-                    f"Purata markah Top 10 terpantas: {lb_fast10['Markah'].mean():.1f}."
+                    "Ranking berdasarkan markah tertinggi dahulu, kemudian masa selesai "
+                    "terpantas sebagai pemecah seri."
                 ),
 
                 # ── Footer ────────────────────────────────────────────
