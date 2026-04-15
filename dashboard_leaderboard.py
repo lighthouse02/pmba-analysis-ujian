@@ -178,6 +178,15 @@ for _neg in lb_breakdown_neg:
     _top["Mean"] = _top["Mean"].round(1)
     lb_school_data[_neg] = _top
 
+# ── Fastest completion time (Top 10) ──────────────────────────────────────────
+lb_fast = lb_pos[lb_pos["Masa Selesai"].notna()].copy()
+lb_fast["_ms_td"] = pd.to_timedelta(lb_fast["Masa Selesai"])
+lb_fast10 = (
+    lb_fast.nsmallest(10, "_ms_td")
+    [["Nama Peserta", "Sekolah", "Negeri", "Markah", "Masa Selesai"]]
+    .reset_index(drop=True)
+)
+
 # Per school: skewness of Markah
 lb_skew_data = {}
 for _neg in lb_breakdown_neg:
@@ -274,6 +283,37 @@ def build_lb_skew_chart(negeri, school):
         bargap=0.08,
     )
     return dcc.Graph(figure=fig, config={"displayModeBar": False})
+
+
+def build_lb_fastest_table():
+    if lb_fast10.empty:
+        return html.P("Tiada data", style={"color": "#666"})
+    header = html.Thead(html.Tr([
+        html.Th(c, style={"fontSize": "0.75rem", "color": "#888",
+                          "borderBottom": "1px solid #333", "padding": "6px 10px"})
+        for c in ["#", "Nama Peserta", "Sekolah", "Negeri", "Markah", "Masa Selesai"]
+    ]))
+    rows = []
+    for i, (_, r) in enumerate(lb_fast10.iterrows(), 1):
+        medal = {1: "\U0001f947", 2: "\U0001f948", 3: "\U0001f949"}.get(i, str(i))
+        rows.append(html.Tr([
+            html.Td(medal, style={"fontSize": "0.85rem", "textAlign": "center",
+                                  "padding": "6px 10px"}),
+            html.Td(r["Nama Peserta"], style={"fontSize": "0.78rem", "color": "#ccc",
+                                               "padding": "6px 10px"}),
+            html.Td(r["Sekolah"], style={"fontSize": "0.78rem", "color": "#aaa",
+                                          "maxWidth": "220px", "padding": "6px 10px"}),
+            html.Td(r["Negeri"], style={"fontSize": "0.78rem", "color": "#aaa",
+                                         "padding": "6px 10px"}),
+            html.Td(str(r["Markah"]), style={"fontSize": "0.78rem", "color": "#38bdf8",
+                                              "textAlign": "center", "padding": "6px 10px"}),
+            html.Td(r["Masa Selesai"], style={"fontSize": "0.78rem", "color": "#34d399",
+                                               "textAlign": "center", "padding": "6px 10px",
+                                               "fontWeight": "600"}),
+        ]))
+    return dbc.Table([header, html.Tbody(rows)], bordered=False,
+                     style={"marginBottom": "0", "background": "transparent",
+                            "color": "#ccc"})
 
 
 def _conclusion(text, accent="#4E9AF1"):
@@ -428,6 +468,23 @@ app.layout = html.Div(
                     "Skewness positif menunjukkan majoriti peserta mendapat markah rendah "
                     "(ekor panjang ke kanan). Skewness negatif bermakna kebanyakan peserta "
                     "skor tinggi. Nilai hampir 0 = taburan sekata."
+                ),
+
+                # ── Section 4: Fastest completion ─────────────────────
+                html.P("MASA SELESAI TERPANTAS (TOP 10)", style=SECTION_LABEL_STYLE),
+                html.P("Peserta yang menamatkan ujian paling awal dengan markah > 0.",
+                       style={"color": "#666", "fontSize": "0.8rem",
+                              "marginBottom": "16px"}),
+                html.Div(
+                    build_lb_fastest_table(),
+                    style={"background": CARD_BG, "borderRadius": "12px",
+                           "padding": "14px", "border": f"1px solid {BORDER}",
+                           "overflowX": "auto", "marginBottom": "10px"},
+                ),
+                _conclusion(
+                    f"Peserta terpantas menamatkan ujian pada {lb_fast10.iloc[0]['Masa Selesai']} "
+                    f"dengan markah {lb_fast10.iloc[0]['Markah']:.0f}. "
+                    f"Purata markah Top 10 terpantas: {lb_fast10['Markah'].mean():.1f}."
                 ),
 
                 # ── Footer ────────────────────────────────────────────
